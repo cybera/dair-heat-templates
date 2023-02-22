@@ -1,0 +1,113 @@
+description: Template to install Movie Recommender BoosterPack
+heat_template_version: 2018-03-02
+# Adapted from Morpheus Blueprint for 
+# https://www.canarie.ca/cloud/boosterpacks/catalogue/time-series-prediction-with-machine-learning/sample-solution-time-series-prediction-with-machine-learning/
+# Shawn Ayotte 2023
+
+resources:
+  my_key:
+    type: OS::Nova::KeyPair
+    properties:
+      save_private_key: true
+      name: t_series_key
+
+  security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      description: Security Group for Jupyter Notebook
+      name: jupyter_security_group
+      rules:
+        - direction: ingress
+          ethertype: IPv4
+          port_range_min: 22
+          port_range_max: 22
+          protocol: tcp
+          remote_ip_prefix: 0.0.0.0/0
+        - direction: ingress
+          ethertype: IPv6
+          port_range_min: 22
+          port_range_max: 22
+          protocol: tcp
+          remote_ip_prefix: ::/0
+        - direction: ingress
+          ethertype: IPv4
+          protocol: icmp
+          remote_ip_prefix: 0.0.0.0/0
+        - direction: ingress
+          ethertype: IPv6
+          protocol: icmp
+          remote_ip_prefix: ::/0
+  instance:
+    type: OS::Nova::Server
+    properties:
+      flavor: "v2.medium"
+      key_name: { get_resource: my_key }
+      image: "Ubuntu 20.04 - 510"
+      security_groups:
+        - { get_resource: security_group }
+      networks:
+        - network: default
+      user_data: |
+        #!/bin/bash
+        wall "Completing Install"
+        touch /home/ubuntu/still_installing
+        export DEBIAN_FRONTEND=noninteractive
+        set -e
+        wall "movierec-provision: Starting"
+        wall "movierec-provision: Installing docker"
+        curl -fsSL https://get.docker.com -o get-docker.sh
+        sh get-docker.sh
+        wall "movierec-provision: Installing nvidia-docker"
+        curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+        distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+        curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+        apt-get update
+        apt-get install -y nvidia-docker2 || true 
+        pkill -SIGHUP dockerd || true
+        wall "movierec-provision: Done"
+        wall "movierec--run-server: Get code and models"
+        cd /home/$(ls /home/* -d | head -n 1 | cut -d/ -f3)/
+        wget --no-check-certificate  https://code.cloud.canarie.ca:3000/carlamb/MovieRecommender/archive/master.zip
+        unzip master.zip
+        cd movierecommender/modelstrt
+        unzip movierec.zip
+        rm movierec.zip
+        docker ps -q --filter "name=trtserver" | grep -q . && docker stop trtserver
+        wall "movierec-run-inference-server: Run inference server"
+        nvidia-docker run -d --rm --name trtserver \
+          --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 \
+          -p8000:8000 -p8001:8001 -p8002:8002 \
+          -v/home/$(ls /home/* -d | head -n 1 | cut -d/ -f3)/movierecommender/modelstrt:/models \
+          --health-cmd='curl localhost:8000/api/status | grep "ready_state: SERVER_READY" || exit 1' \
+          --health-timeout=10s \
+          --health-interval=1s  \
+          nvcr.io/nvidia/tensorrtserver:19.02-py3 \
+          trtserver --model-store=/models && \
+          c=0 && sleep 2 && \
+          until docker inspect --format "{{json .State.Health.Status }}" trtserver | \
+          grep -m 1 '"healthy"'; do
+            ((c++)) && ((c>50)) && break
+            sleep 2
+          done
+        docker ps -q --filter "name=trtclient" | grep -q . && docker stop trtclient
+        wall "movierec--run-server: Run docker for client command line"
+        nvidia-docker run --rm -d -it --net=host --name trtclient \
+        --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 \
+        -v /home/$(ls /home/* -d | head -n 1 | cut -d/ -f3)/movierecommender/movierec:/workspace/movierec \
+        nvcr.io/nvidia/tensorflow:19.02-py3  \
+        /bin/bash -c "cd /workspace/ && mkdir clients && cd clients && \
+          wget https://github.com/NVIDIA/tensorrt-inference-server/releases/download/v0.11.0/v0.11.0.clients.tar.gz && \
+          tar xzf v0.11.0.clients.tar.gz && apt-get update && apt-get -y install python3-pip libcurl3 && \
+          pip3 install --user --upgrade python/tensorrtserver-*.whl pillow && cd .. && bash"
+        wall $(docker inspect --format "{{json .State.Health.Status }}" trtserver)
+        mv /home/ubuntu/still_installing /home/ubuntu/install_complete
+
+outputs:
+  instance_detail:
+    description: 
+    value: { get_attr: [instance, show] }
+
+  private_key:
+    description: Private key
+    value: { get_attr: [ my_key, private_key ] }
+
