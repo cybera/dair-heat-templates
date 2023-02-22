@@ -14,8 +14,8 @@ resources:
   security_group:
     type: OS::Neutron::SecurityGroup
     properties:
-      description: Security Group for Jupyter Notebook
-      name: jupyter_security_group
+      description: Security Group for Movie Recommender
+      name: mrecommender_security_group
       rules:
         - direction: ingress
           ethertype: IPv4
@@ -46,7 +46,7 @@ resources:
       security_groups:
         - { get_resource: security_group }
       networks:
-        - network: default
+        - network: public
       user_data: |
         #!/bin/bash
         wall "Completing Install"
