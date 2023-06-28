@@ -2,7 +2,22 @@ description: Template to install Bluwave-ai DAIR BoosterPack Flight Plan
 heat_template_version: 2018-03-02
 # Adapted from Morpheus Blueprint for 
 # https://www.canarie.ca/cloud/boosterpacks/catalogue/time-series-prediction-with-machine-learning/sample-solution-time-series-prediction-with-machine-learning/
-# Shawn Ayotte 2023
+
+parameters:
+  my_flavor:
+    type: string
+    label: Flavor / Instance Type
+    description: Size or Type of Instance to create
+    default: v3.medium
+    constraints:
+      - allowed_values: [ v3.medium, v3.mediumx2, v3.mediumx4, v3.mediumx8, v3.large, v3.largex2, v3.largex4, v3.largex8 ]
+        description: Value must be one of v3.medium or v3.large (or derivatives)
+
+  my_image:
+    type: string
+    label: Image
+    description: Image to Use
+    default: Ubuntu 20.04 - 510
 
 resources:
   my_key:
@@ -24,30 +39,31 @@ resources:
           protocol: tcp
           remote_ip_prefix: 0.0.0.0/0
         - direction: ingress
-          ethertype: IPv6
-          port_range_min: 22
-          port_range_max: 22
-          protocol: tcp
-          remote_ip_prefix: ::/0
-        - direction: ingress
           ethertype: IPv4
           protocol: icmp
           remote_ip_prefix: 0.0.0.0/0
-        - direction: ingress
-          ethertype: IPv6
-          protocol: icmp
-          remote_ip_prefix: ::/0
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: public
+
+  association:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: {get_attr: [instance, addresses, default, 0, port]}
+
   instance:
     type: OS::Nova::Server
     properties:
-      flavor: "v2.medium"
+      flavor: { get_param: my_flavor }
       key_name: { get_resource: my_key }
-      image: "Ubuntu 20.04 - 510"
+      image: { get_param: my_image }
       security_groups:
         - { get_resource: security_group }
       networks:
-        - network: public
-      # user_data_format: RAW
+        - network: default
       user_data: |
         #!/bin/bash
         wall "Completing Install"
