@@ -1,7 +1,7 @@
 description: Template to install Movie Recommender BoosterPack
 heat_template_version: 2018-03-02
 # Adapted from Morpheus Blueprint for 
-# https://www.canarie.ca/cloud/boosterpacks/catalogue/time-series-prediction-with-machine-learning/sample-solution-time-series-prediction-with-machine-learning/
+# https://www.canarie.ca/cloud/boosterpacks/catalogue/flight-plan-automatic-recommendation-system-using-machine-learning/sample-solution-movie-recommender/
 
 parameters:
   my_flavor:
@@ -24,7 +24,7 @@ resources:
     type: OS::Nova::KeyPair
     properties:
       save_private_key: true
-      name: t_series_key
+      name: m_recommend_key
 
   security_group:
     type: OS::Neutron::SecurityGroup

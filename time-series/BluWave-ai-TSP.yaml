@@ -66,26 +66,35 @@ resources:
         - network: default
       user_data: |
         #!/bin/bash
-        wall "Completing Install"
+        wall "Installing Components"
+        logger "Installing Components"
         touch /home/ubuntu/still_installing
         echo -n | openssl s_client -showcerts -connect code.cloud.canarie.ca:3000 2>/dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > ~/gogs.pem
         mv ~/gogs.pem /etc/ssl/certs/GOGS.pem
         mkdir /home/tsp
         wall "Cloning Time Series Repo"
-        git clone https://code.cloud.canarie.ca:3000/bluwave-ai/time-series-prediction.git /home/tsp/time-series-prediction
+        logger "Cloning Time Series Repo"
+        sleep 10
+        git clone -q https://code.cloud.canarie.ca:3000/bluwave-ai/time-series-prediction.git /home/tsp/time-series-prediction
         chmod o+w -R /home/tsp/time-series-prediction
         wall "Installing MiniConda"
-        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -P /home/tsp/
-        bash /home/tsp/Miniconda3-latest-Linux-x86_64.sh -b -p /home/tsp/miniconda
-        wall "Creating TSP Environments"
+        logger "Installing MiniConda"
+        wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -P /home/tsp/
+        sync
+        HOME=~ bash /home/tsp/Miniconda3-latest-Linux-x86_64.sh -b -p /home/tsp/miniconda
+        wall "Setting up Conda"
+        logger "Setting up Conda"
         export PATH="/home/tsp/miniconda/bin:$PATH"
         source "/home/tsp/miniconda/bin/activate"
         conda init
-        exec bash
+        wall "Creating TSP Environments"
+        logger "Creating TSP Environments"
         cd /home/tsp/time-series-prediction/energy-prediction
-        make create_environment
+        bash make create_environment
         cd /home/tsp/time-series-prediction/weather-prediction
-        make create_environment
+        bash make create_environment
+        wall "Install Complete"
+        logger "Install Complete"
         mv /home/ubuntu/still_installing /home/ubuntu/install_complete
 
 outputs:
