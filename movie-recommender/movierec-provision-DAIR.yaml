@@ -1,5 +1,5 @@
 description: Template to install Movie Recommender BoosterPack
-heat_template_version: 2018-03-02
+heat_template_version: 2021-04-16
 # Adapted from Morpheus Blueprint for 
 # https://www.canarie.ca/cloud/boosterpacks/catalogue/flight-plan-automatic-recommendation-system-using-machine-learning/sample-solution-movie-recommender/
 
@@ -10,14 +10,15 @@ parameters:
     description: Size or Type of Instance to create
     default: v3.medium
     constraints:
-      - allowed_values: [ v3.medium, v3.mediumx2, v3.mediumx4, v3.mediumx8, v3.large, v3.largex2, v3.largex4, v3.largex8 ]
-        description: Value must be one of v3.medium or v3.large (or derivatives)
+      - custom_constraint: nova.flavor
 
   my_image:
     type: string
     label: Image
     description: Image to Use
-    default: Ubuntu 20.04 - 510
+    default: Ubuntu 22.04 - vGPU - 525
+    constraints:
+      - custom_constraint: glance.image
 
 resources:
   my_key:
